@@ -1,6 +1,5 @@
 import { hostname as osHostname } from "node:os";
 import { basename } from "node:path";
-import { visibleWidth } from "@earendil-works/pi-tui";
 import type { BuiltinStatusLineSegmentId, RenderedSegment, SegmentContext, SemanticColor, StatusLineSegment, StatusLineSegmentId } from "./types.ts";
 import { normalizeCompactExtensionStatus, normalizeExtensionStatusValue } from "./powerline-config.ts";
 import { fg, rainbow, applyColor } from "./theme.ts";
@@ -59,9 +58,11 @@ const modelSegment: StatusLineSegment = {
     if (opts.showThinkingLevel !== false && ctx.model?.reasoning) {
       const level = ctx.thinkingLevel || "off";
       if (level !== "off") {
-        const thinkingText = getThinkingText(level);
-        if (thinkingText) {
-          content += `${SEP_DOT}${thinkingText}`;
+        if (opts.thinkingDisplay === "parenthesized") {
+          content += ` (${level})`;
+        } else {
+          const thinkingText = getThinkingText(level);
+          if (thinkingText) content += `${SEP_DOT}${thinkingText}`;
         }
       }
     }
@@ -297,18 +298,27 @@ const contextPctSegment: StatusLineSegment = {
     const icons = getIcons();
     const pct = ctx.contextPercent;
     const window = ctx.contextWindow;
+    const percentOnly = ctx.options.context?.display === "percent";
+    const decimalPlaces = ctx.options.context?.decimalPlaces ?? 1;
 
-    const autoIcon = ctx.autoCompactEnabled && icons.auto ? ` ${icons.auto}` : "";
-    const text = `${pct.toFixed(1)}%/${formatTokens(window)}${autoIcon}`;
+    const showAutoCompact = ctx.options.context?.showAutoCompact !== false;
+    const autoIcon = showAutoCompact && ctx.autoCompactEnabled && icons.auto ? ` ${icons.auto}` : "";
+    const text = percentOnly
+      ? `${pct.toFixed(decimalPlaces)}%`
+      : `${pct.toFixed(decimalPlaces)}%/${formatTokens(window)}${autoIcon}`;
+    const showIcon = ctx.options.context?.showIcon ?? !percentOnly;
+    const decorate = (value: string) => showIcon ? withIcon(icons.context, value) : value;
 
-    // Icon outside color, text inside - use semantic colors for thresholds
+    // Preserve warning/error thresholds while coloring the icon and value together.
     let content: string;
     if (pct > 90) {
-      content = withIcon(icons.context, color(ctx, "contextError", text));
+      content = color(ctx, "contextError", decorate(text));
     } else if (pct > 70) {
-      content = withIcon(icons.context, color(ctx, "contextWarn", text));
+      content = color(ctx, "contextWarn", decorate(text));
+    } else if (ctx.options.context?.color) {
+      content = applyColor(ctx.theme, ctx.options.context.color, decorate(text));
     } else {
-      content = withIcon(icons.context, color(ctx, "context", text));
+      content = color(ctx, "context", decorate(text));
     }
 
     return { content, visible: true };
@@ -490,7 +500,7 @@ function renderCustomSegment(id: `custom:${string}`, ctx: SegmentContext): Rende
 
 export function renderSegment(id: StatusLineSegmentId, ctx: SegmentContext): RenderedSegment {
   if (id.startsWith("custom:")) {
-    return renderCustomSegment(id, ctx);
+    return renderCustomSegment(id as `custom:${string}`, ctx);
   }
 
   const segment = SEGMENTS[id];

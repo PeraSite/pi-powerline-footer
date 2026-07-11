@@ -1,9 +1,33 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { ColorValue, CustomItemPosition, CustomStatusItem, PresetDef, StatusLinePreset, StatusLineSegmentId, StatusLineSegmentOptions } from "./types.ts";
+import type {
+  BuiltinStatusLineSegmentId,
+  ColorValue,
+  CustomItemPosition,
+  CustomStatusItem,
+  PresetDef,
+  StatusLinePreset,
+  StatusLineSegmentId,
+  StatusLineSegmentOptions,
+  StatusLineSeparatorStyle,
+} from "./types.ts";
+
+export type PowerlineWidgetPlacement = "aboveEditor" | "belowEditor";
+
+export interface PowerlineSegmentLayout {
+  left?: BuiltinStatusLineSegmentId[];
+  right?: BuiltinStatusLineSegmentId[];
+  secondary?: BuiltinStatusLineSegmentId[];
+}
 
 export interface PowerlineConfig {
   preset: StatusLinePreset;
+  separator?: StatusLineSeparatorStyle;
+  layout?: PowerlineSegmentLayout;
+  primaryPlacement: PowerlineWidgetPlacement;
+  secondaryPlacement: PowerlineWidgetPlacement;
   customItems: CustomStatusItem[];
+  hiddenStatusKeys: string[];
+  hiddenSegments: BuiltinStatusLineSegmentId[];
   segmentOptions: StatusLineSegmentOptions;
   mouseScroll: boolean;
   fixedEditor: boolean;
@@ -13,6 +37,55 @@ export interface PowerlineConfig {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const SEPARATOR_STYLES = new Set<StatusLineSeparatorStyle>([
+  "powerline", "powerline-thin", "slash", "pipe", "block",
+  "none", "ascii", "dot", "chevron", "star",
+]);
+
+const BUILTIN_SEGMENTS = new Set<BuiltinStatusLineSegmentId>([
+  "model", "shell_mode", "path", "git", "subagents", "token_in",
+  "token_out", "token_total", "cost", "context_pct", "context_total",
+  "time_spent", "time", "session", "hostname", "cache_read",
+  "cache_write", "thinking", "extension_statuses",
+]);
+
+function normalizeSeparator(value: unknown): StatusLineSeparatorStyle | undefined {
+  return typeof value === "string" && SEPARATOR_STYLES.has(value as StatusLineSeparatorStyle)
+    ? value as StatusLineSeparatorStyle
+    : undefined;
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean))];
+}
+
+function normalizeHiddenSegments(value: unknown): BuiltinStatusLineSegmentId[] {
+  return normalizeStringList(value).filter((entry): entry is BuiltinStatusLineSegmentId =>
+    BUILTIN_SEGMENTS.has(entry as BuiltinStatusLineSegmentId),
+  );
+}
+
+function normalizeSegmentLayout(value: unknown): PowerlineSegmentLayout | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const layout: PowerlineSegmentLayout = {};
+  if (Array.isArray(value.left)) layout.left = normalizeHiddenSegments(value.left);
+  if (Array.isArray(value.right)) layout.right = normalizeHiddenSegments(value.right);
+  if (Array.isArray(value.secondary)) layout.secondary = normalizeHiddenSegments(value.secondary);
+
+  return Object.keys(layout).length > 0 ? layout : undefined;
+}
+
+function normalizeWidgetPlacement(
+  value: unknown,
+  fallback: PowerlineWidgetPlacement,
+ ): PowerlineWidgetPlacement {
+  if (value === "above" || value === "aboveEditor") return "aboveEditor";
+  if (value === "below" || value === "belowEditor") return "belowEditor";
+  return fallback;
 }
 
 function normalizePreset(value: unknown, presets: readonly StatusLinePreset[]): StatusLinePreset | null {
@@ -93,6 +166,9 @@ function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmen
     options.model = {
       ...(typeof raw.model.showThinkingLevel === "boolean" ? { showThinkingLevel: raw.model.showThinkingLevel } : {}),
       ...(raw.model.display === "name" || raw.model.display === "qualified" ? { display: raw.model.display } : {}),
+      ...(raw.model.thinkingDisplay === "detailed" || raw.model.thinkingDisplay === "parenthesized"
+        ? { thinkingDisplay: raw.model.thinkingDisplay }
+        : {}),
     };
   }
 
@@ -132,6 +208,28 @@ function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmen
     };
   }
 
+  if (isRecord(raw.context)) {
+    const contextColor = normalizeCustomColor(raw.context.color);
+    options.context = {
+      ...(contextColor ? { color: contextColor } : {}),
+      ...(typeof raw.context.showAutoCompact === "boolean"
+        ? { showAutoCompact: raw.context.showAutoCompact }
+        : {}),
+      ...(typeof raw.context.showIcon === "boolean"
+        ? { showIcon: raw.context.showIcon }
+        : {}),
+      ...(typeof raw.context.decimalPlaces === "number"
+        && Number.isFinite(raw.context.decimalPlaces)
+        && raw.context.decimalPlaces >= 0
+        && raw.context.decimalPlaces <= 3
+        ? { decimalPlaces: Math.floor(raw.context.decimalPlaces) }
+        : {}),
+      ...(raw.context.display === "full" || raw.context.display === "percent"
+        ? { display: raw.context.display }
+        : {}),
+    };
+  }
+
   return options;
 }
 
@@ -147,13 +245,22 @@ export function mergeSegmentOptions(
     git: { ...defaults.git, ...overrides.git },
     time: { ...defaults.time, ...overrides.time },
     cost: { ...defaults.cost, ...overrides.cost },
+    ...(defaults.context || overrides.context
+      ? { context: { ...defaults.context, ...overrides.context } }
+      : {}),
   };
 }
 
 export function parsePowerlineConfig(value: unknown, presets: readonly StatusLinePreset[]): PowerlineConfig {
   const defaultConfig: PowerlineConfig = {
     preset: "default",
+    separator: undefined,
+    layout: undefined,
+    primaryPlacement: "aboveEditor",
+    secondaryPlacement: "belowEditor",
     customItems: [],
+    hiddenStatusKeys: [],
+    hiddenSegments: [],
     segmentOptions: {},
     mouseScroll: true,
     fixedEditor: true,
@@ -166,9 +273,16 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
 
   if (!isRecord(value)) return defaultConfig;
 
+  const placement = isRecord(value.placement) ? value.placement : {};
   return {
     preset: normalizePreset(value.preset, presets) ?? defaultConfig.preset,
+    separator: normalizeSeparator(value.separator),
+    layout: normalizeSegmentLayout(value.layout),
+    primaryPlacement: normalizeWidgetPlacement(placement.primary, defaultConfig.primaryPlacement),
+    secondaryPlacement: normalizeWidgetPlacement(placement.secondary, defaultConfig.secondaryPlacement),
     customItems: normalizeCustomItems(value.customItems),
+    hiddenStatusKeys: normalizeStringList(value.hiddenStatusKeys),
+    hiddenSegments: normalizeHiddenSegments(value.hiddenSegments),
     segmentOptions: normalizeSegmentOptions(value),
     mouseScroll: value.mouseScroll !== false,
     fixedEditor: value.fixedEditor !== false,
@@ -177,14 +291,25 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
   };
 }
 
-export function mergeSegmentsWithCustomItems(presetDef: PresetDef, customItems: readonly CustomStatusItem[]): {
+export function mergeSegmentsWithCustomItems(
+  presetDef: PresetDef,
+  customItems: readonly CustomStatusItem[],
+  hiddenSegments: ReadonlySet<BuiltinStatusLineSegmentId> = new Set(),
+  layout?: PowerlineSegmentLayout,
+): {
   leftSegments: StatusLineSegmentId[];
   rightSegments: StatusLineSegmentId[];
   secondarySegments: StatusLineSegmentId[];
 } {
-  const left: StatusLineSegmentId[] = [...presetDef.leftSegments];
-  const right: StatusLineSegmentId[] = [...presetDef.rightSegments];
-  const secondary: StatusLineSegmentId[] = [...(presetDef.secondarySegments ?? [])];
+  const seen = new Set<BuiltinStatusLineSegmentId>();
+  const visible = (segment: BuiltinStatusLineSegmentId) => {
+    if (hiddenSegments.has(segment) || seen.has(segment)) return false;
+    seen.add(segment);
+    return true;
+  };
+  const left: StatusLineSegmentId[] = (layout?.left ?? presetDef.leftSegments).filter(visible);
+  const right: StatusLineSegmentId[] = (layout?.right ?? presetDef.rightSegments).filter(visible);
+  const secondary: StatusLineSegmentId[] = (layout?.secondary ?? presetDef.secondarySegments ?? []).filter(visible);
 
   for (const item of customItems) {
     const segmentId: StatusLineSegmentId = `custom:${item.id}`;
@@ -214,8 +339,11 @@ export function nextPowerlineSettingWithOptions(
   return { ...existingPowerlineSetting, ...updates };
 }
 
-export function collectHiddenExtensionStatusKeys(customItems: readonly CustomStatusItem[]): Set<string> {
-  const hidden = new Set<string>();
+export function collectHiddenExtensionStatusKeys(
+  customItems: readonly CustomStatusItem[],
+  hiddenStatusKeys: readonly string[] = [],
+): Set<string> {
+  const hidden = new Set(hiddenStatusKeys);
   for (const item of customItems) {
     if (item.excludeFromExtensionStatuses) hidden.add(item.statusKey);
   }

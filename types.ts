@@ -76,7 +76,11 @@ export type StatusLinePreset =
 
 // Per-segment options
 export interface StatusLineSegmentOptions {
-  model?: { showThinkingLevel?: boolean; display?: "name" | "qualified" };
+  model?: {
+    showThinkingLevel?: boolean;
+    display?: "name" | "qualified";
+    thinkingDisplay?: "detailed" | "parenthesized";
+  };
   path?: { 
     mode?: "basename" | "abbreviated" | "full";
     maxLength?: number;
@@ -90,6 +94,13 @@ export interface StatusLineSegmentOptions {
   };
   time?: { format?: "12h" | "24h"; showSeconds?: boolean };
   cost?: { subscriptionDisplay?: "subscription" | "reported-cost" | "both" };
+  context?: {
+    color?: ColorValue;
+    showAutoCompact?: boolean;
+    showIcon?: boolean;
+    decimalPlaces?: number;
+    display?: "full" | "percent";
+  };
 }
 
 export type CustomItemPosition = "left" | "right" | "secondary";

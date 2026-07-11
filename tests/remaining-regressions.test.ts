@@ -70,6 +70,16 @@ test("model segment can show provider-qualified ids", () => {
   assert.equal(stripAnsi(alreadyQualified.content), "openai/gpt-4.1");
 });
 
+test("model segment can show effort as parenthesized model-colored text", () => {
+  const rendered = renderSegment("model", createSegmentContext({
+    model: { id: "gpt-5.6-sol", name: "GPT-5.6 Sol", reasoning: true },
+    thinkingLevel: "high",
+    options: { model: { showThinkingLevel: true, thinkingDisplay: "parenthesized" } },
+  }));
+
+  assert.equal(stripAnsi(rendered.content), "GPT-5.6 Sol (high)");
+});
+
 test("cost segment supports subscription display modes", () => {
   const subscription = renderSegment("cost", createSegmentContext({
     usingSubscription: true,
@@ -103,6 +113,50 @@ test("cost segment supports subscription display modes", () => {
 
 test("Nerd Font context icon uses stable database glyph", () => {
   assert.equal(NERD_ICONS.context, "\uF1C0");
+});
+
+test("context segment supports an explicit normal-state color", () => {
+  const rendered = renderSegment("context_pct", createSegmentContext({
+    contextPercent: 42.1,
+    contextWindow: 372_000,
+    options: { context: { color: "accent" } },
+    theme: { fg: (color, text) => `[${color}]${text}[/${color}]` },
+  }));
+
+  assert.match(rendered.content, /^\[accent\]/);
+  assert.match(rendered.content, /42\.1%\/372k/);
+});
+
+test("context segment can hide the auto-compaction icon", () => {
+  const rendered = renderSegment("context_pct", createSegmentContext({
+    contextPercent: 42.1,
+    contextWindow: 372_000,
+    autoCompactEnabled: true,
+    options: { context: { showAutoCompact: false } },
+  }));
+
+  assert.doesNotMatch(rendered.content, /AC/);
+});
+
+test("context segment can display only its percentage", () => {
+  const rendered = renderSegment("context_pct", createSegmentContext({
+    contextPercent: 86.2,
+    contextWindow: 372_000,
+    options: { context: { display: "percent", showAutoCompact: false } },
+  }));
+
+  assert.equal(stripAnsi(rendered.content), "86.2%");
+});
+
+test("context percentage supports integer precision with an icon", () => {
+  const rendered = renderSegment("context_pct", createSegmentContext({
+    contextPercent: 86.2,
+    contextWindow: 372_000,
+    options: { context: { display: "percent", decimalPlaces: 0, showIcon: true } },
+  }));
+
+  assert.match(stripAnsi(rendered.content), /86%$/);
+  assert.notEqual(stripAnsi(rendered.content), "86%");
 });
 
 test("startup welcome predicate respects powerline.welcome false", () => {

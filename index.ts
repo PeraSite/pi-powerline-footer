@@ -39,7 +39,7 @@ import { isStaleExtensionContextError, shouldResetExtendedKeyboardModesOnShutdow
 import { renderFixedEditorCluster } from "./fixed-editor/cluster.ts";
 import { DEFAULT_SCROLL_REPAINT_THROTTLE_MS, emergencyTerminalModeReset, TerminalSplitCompositor } from "./fixed-editor/terminal-split.ts";
 import { inlineEditorQuitCursorRestore } from "./terminal-cursor.ts";
-import { getDefaultColors } from "./theme.ts";
+import { fg, getDefaultColors } from "./theme.ts";
 import {
   isSupportedSuperShortcut,
   matchesConfiguredShortcut,
@@ -70,7 +70,14 @@ import {
 
 let config: PowerlineConfig = {
   preset: "default",
+  separator: undefined,
+  layout: undefined,
+  primaryPlacement: "aboveEditor",
+  secondaryPlacement: "belowEditor",
   customItems: [],
+  hiddenStatusKeys: [],
+  hiddenSegments: [],
+  segmentOptions: {},
   mouseScroll: true,
   fixedEditor: true,
   welcome: true,
@@ -944,88 +951,112 @@ function renderSegmentWithWidth(
   return { content: rendered.content, width: visibleWidth(rendered.content), visible: true };
 }
 
-/** Build content string from pre-rendered parts */
-function buildContentFromParts(
-  parts: string[],
-  presetDef: ReturnType<typeof getPreset>
+type RenderedStatusSegment = { content: string; width: number };
+
+function joinSegmentContents(
+  parts: readonly RenderedStatusSegment[],
+  separatorStyle: ReturnType<typeof getPreset>["separator"],
+  ctx: SegmentContext,
 ): string {
   if (parts.length === 0) return "";
-  const separatorDef = getSeparator(presetDef.separator);
-  const sepAnsi = getFgAnsiCode("sep");
-  const sep = separatorDef.left;
-  return " " + parts.join(` ${sepAnsi}${sep}${ansi.reset} `) + ansi.reset + " ";
+  const separatorDef = getSeparator(separatorStyle);
+  const separator = separatorDef.left ? ` ${fg(ctx.theme, "separator", separatorDef.left, ctx.colors)} ` : " ";
+  return parts.map((part) => part.content).join(separator) + ansi.reset;
 }
 
-/**
- * Responsive segment layout - fits segments into top bar, overflows to secondary row.
- * When terminal is wide enough, secondary segments move up to top bar.
- * When narrow, top bar segments overflow down to secondary row.
- */
+function segmentGroupWidth(
+  parts: readonly RenderedStatusSegment[],
+  separatorWidth: number,
+): number {
+  if (parts.length === 0) return 0;
+  return parts.reduce((total, part) => total + part.width, 0) + separatorWidth * (parts.length - 1);
+}
+
+function buildContentFromParts(
+  parts: readonly RenderedStatusSegment[],
+  separatorStyle: ReturnType<typeof getPreset>["separator"],
+  ctx: SegmentContext,
+): string {
+  const content = joinSegmentContents(parts, separatorStyle, ctx);
+  return content ? ` ${content} ` : "";
+}
+
+function buildAlignedContent(
+  left: readonly RenderedStatusSegment[],
+  right: readonly RenderedStatusSegment[],
+  separatorStyle: ReturnType<typeof getPreset>["separator"],
+  width: number,
+  ctx: SegmentContext,
+): string {
+  const leftContent = joinSegmentContents(left, separatorStyle, ctx);
+  const rightContent = joinSegmentContents(right, separatorStyle, ctx);
+  if (!leftContent && !rightContent) return "";
+
+  const leftWidth = visibleWidth(leftContent);
+  const rightWidth = visibleWidth(rightContent);
+  if (!leftContent) {
+    return `${" ".repeat(Math.max(1, width - rightWidth - 1))}${rightContent} `;
+  }
+  if (!rightContent) return ` ${leftContent} `;
+
+  const padding = " ".repeat(Math.max(1, width - leftWidth - rightWidth - 2));
+  return ` ${leftContent}${padding}${rightContent} `;
+}
+
+function renderSegmentIds(ids: readonly StatusLineSegmentId[], ctx: SegmentContext): RenderedStatusSegment[] {
+  const rendered: RenderedStatusSegment[] = [];
+  for (const id of ids) {
+    const segment = renderSegmentWithWidth(id, ctx);
+    if (segment.visible) rendered.push({ content: segment.content, width: segment.width });
+  }
+  return rendered;
+}
+
+/** Render primary left/right groups with right alignment and overflow on the secondary row. */
 function computeResponsiveLayout(
   ctx: SegmentContext,
   presetDef: ReturnType<typeof getPreset>,
   availableWidth: number
 ): { topContent: string; secondaryContent: string } {
-  const separatorDef = getSeparator(presetDef.separator);
-  const sepWidth = visibleWidth(separatorDef.left) + 2; // separator + spaces around it
-  
-  // Get all segments: primary first, then secondary
-  const mergedSegments = mergeSegmentsWithCustomItems(presetDef, config.customItems);
-  const primaryIds = [...mergedSegments.leftSegments, ...mergedSegments.rightSegments];
-  const secondaryIds = mergedSegments.secondarySegments;
-  const allSegmentIds = [...primaryIds, ...secondaryIds];
-  
-  // Render all segments and get their widths
-  const renderedSegments: { content: string; width: number }[] = [];
-  for (const segId of allSegmentIds) {
-    const { content, width, visible } = renderSegmentWithWidth(segId, ctx);
-    if (visible) {
-      renderedSegments.push({ content, width });
-    }
+  const separatorStyle = config.separator ?? presetDef.separator;
+  const separatorDef = getSeparator(separatorStyle);
+  const separatorWidth = separatorDef.left ? visibleWidth(separatorDef.left) + 2 : 1;
+  const mergedSegments = mergeSegmentsWithCustomItems(
+    presetDef,
+    config.customItems,
+    new Set(config.hiddenSegments),
+    config.layout,
+  );
+
+  const left = renderSegmentIds(mergedSegments.leftSegments, ctx);
+  const right = renderSegmentIds(mergedSegments.rightSegments, ctx);
+  const overflow: RenderedStatusSegment[] = [];
+  const primaryWidth = () => {
+    const groups = Number(left.length > 0) + Number(right.length > 0);
+    return 2 + segmentGroupWidth(left, separatorWidth) + segmentGroupWidth(right, separatorWidth) + (groups === 2 ? 1 : 0);
+  };
+
+  while (primaryWidth() > availableWidth && (right.length > 0 || left.length > 0)) {
+    const removed = right.length > 0 ? right.pop() : left.pop();
+    if (removed) overflow.unshift(removed);
   }
-  
-  if (renderedSegments.length === 0) {
-    return { topContent: "", secondaryContent: "" };
+
+  const secondaryCandidates = [
+    ...renderSegmentIds(mergedSegments.secondarySegments, ctx),
+    ...overflow,
+  ];
+  const secondary: RenderedStatusSegment[] = [];
+  let secondaryWidth = 2;
+  for (const segment of secondaryCandidates) {
+    const needed = segment.width + (secondary.length > 0 ? separatorWidth : 0);
+    if (secondaryWidth + needed > availableWidth) break;
+    secondary.push(segment);
+    secondaryWidth += needed;
   }
-  
-  // Calculate how many segments fit in top bar
-  // Account for: leading space (1) + trailing space (1) = 2 chars overhead
-  const baseOverhead = 2;
-  let currentWidth = baseOverhead;
-  let topSegments: string[] = [];
-  let overflowSegments: { content: string; width: number }[] = [];
-  let overflow = false;
-  
-  for (const seg of renderedSegments) {
-    const neededWidth = seg.width + (topSegments.length > 0 ? sepWidth : 0);
-    
-    if (!overflow && currentWidth + neededWidth <= availableWidth) {
-      topSegments.push(seg.content);
-      currentWidth += neededWidth;
-    } else {
-      overflow = true;
-      overflowSegments.push(seg);
-    }
-  }
-  
-  // Fit overflow segments into secondary row (same width constraint)
-  // Stop at first non-fitting segment to preserve ordering
-  let secondaryWidth = baseOverhead;
-  let secondarySegments: string[] = [];
-  
-  for (const seg of overflowSegments) {
-    const neededWidth = seg.width + (secondarySegments.length > 0 ? sepWidth : 0);
-    if (secondaryWidth + neededWidth <= availableWidth) {
-      secondarySegments.push(seg.content);
-      secondaryWidth += neededWidth;
-    } else {
-      break;
-    }
-  }
-  
+
   return {
-    topContent: buildContentFromParts(topSegments, presetDef),
-    secondaryContent: buildContentFromParts(secondarySegments, presetDef),
+    topContent: buildAlignedContent(left, right, separatorStyle, availableWidth, ctx),
+    secondaryContent: buildContentFromParts(secondary, separatorStyle, ctx),
   };
 }
 
@@ -2149,8 +2180,16 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     const gitBranch = footerDataRef?.getGitBranch() ?? null;
     const gitStatus = getGitStatus(gitBranch, segmentOptions.git?.polling);
     const extensionStatuses = footerDataRef?.getExtensionStatuses() ?? new Map();
-    const customItemsById = new Map(config.customItems.map((item) => [item.id, item]));
-    const hiddenExtensionStatusKeys = collectHiddenExtensionStatusKeys(config.customItems);
+    const suppressedStatusKeys = new Set(config.hiddenStatusKeys);
+    const customItemsById = new Map(
+      config.customItems
+        .filter((item) => !suppressedStatusKeys.has(item.statusKey))
+        .map((item) => [item.id, item]),
+    );
+    const hiddenExtensionStatusKeys = collectHiddenExtensionStatusKeys(
+      config.customItems,
+      config.hiddenStatusKeys,
+    );
 
     // Check if using OAuth subscription
     const usingSubscription = ctx.model
@@ -2235,7 +2274,10 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
     const statuses = footerDataRef.getExtensionStatuses();
     if (!statuses || statuses.size === 0) return [];
-    const hiddenExtensionStatusKeys = collectHiddenExtensionStatusKeys(config.customItems);
+    const hiddenExtensionStatusKeys = collectHiddenExtensionStatusKeys(
+      config.customItems,
+      config.hiddenStatusKeys,
+    );
 
     const notifications: string[] = [];
     for (const value of getNotificationExtensionStatuses(statuses, hiddenExtensionStatusKeys)) {
@@ -2403,13 +2445,23 @@ export default function powerlineFooter(pi: ExtensionAPI) {
           : [];
         const aboveWidgetLines = fixedWidgetContainerAbove ? compositor.renderHidden(fixedWidgetContainerAbove, width) : [];
         const belowWidgetLines = fixedWidgetContainerBelow ? compositor.renderHidden(fixedWidgetContainerBelow, width) : [];
+        const primaryLines = renderPowerlineTopLines(width, theme);
+        const secondaryLines = renderPowerlineSecondaryLines(width, theme);
+        const abovePowerlineLines = [
+          ...(config.primaryPlacement === "aboveEditor" ? primaryLines : []),
+          ...(config.secondaryPlacement === "aboveEditor" ? secondaryLines : []),
+        ];
+        const belowPowerlineLines = [
+          ...(config.primaryPlacement === "belowEditor" ? primaryLines : []),
+          ...(config.secondaryPlacement === "belowEditor" ? secondaryLines : []),
+        ];
         return renderFixedEditorCluster({
           width,
           terminalRows,
           statusLines: [...aboveWidgetLines, ...renderPowerlineStatusLines(width), ...statusContainerLines],
-          topLines: renderPowerlineTopLines(width, theme),
+          topLines: abovePowerlineLines,
           editorLines: fixedEditorContainer ? compositor.renderHidden(fixedEditorContainer, width) : [],
-          secondaryLines: [...renderPowerlineSecondaryLines(width, theme), ...belowWidgetLines],
+          secondaryLines: [...belowPowerlineLines, ...belowWidgetLines],
           transcriptLines: renderBashTranscriptLines(width, theme),
           lastPromptLines: renderLastPromptLines(width),
         });
@@ -2532,7 +2584,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       render(width: number): string[] {
         return renderPowerlineStatusLines(width);
       },
-    }), { placement: "aboveEditor" });
+    }), { placement: config.primaryPlacement });
 
     ctx.ui.setWidget("powerline-top", (_tui: any, theme: Theme) => ({
       dispose() {},
@@ -2542,7 +2594,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       render(width: number): string[] {
         return renderPowerlineTopLines(width, theme);
       },
-    }), { placement: "aboveEditor" });
+    }), { placement: config.primaryPlacement });
 
     ctx.ui.setWidget("powerline-secondary", (_tui: any, theme: Theme) => ({
       dispose() {},
@@ -2552,7 +2604,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       render(width: number): string[] {
         return renderPowerlineSecondaryLines(width, theme);
       },
-    }), { placement: "belowEditor" });
+    }), { placement: config.secondaryPlacement });
 
     ctx.ui.setWidget("powerline-bash-transcript", (_tui: any, theme: Theme) => ({
       dispose() {},

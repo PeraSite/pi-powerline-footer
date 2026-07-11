@@ -1,0 +1,10 @@
+{
+  "colors": {
+    "model": "#f8e3ba",
+    "path": "#a8e0aa",
+    "gitClean": "#8bb2ec",
+    "context": "#f6b593",
+    "contextWarn": "#f6b593",
+    "separator": "#7c7c7c"
+  }
+}

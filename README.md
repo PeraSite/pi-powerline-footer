@@ -142,7 +142,30 @@ For a compact current footer setup:
 }
 ```
 
+Display overrides can be applied independently of the selected preset:
+
+```json
+{
+  "powerline": {
+    "separator": "dot",
+    "placement": { "primary": "below", "secondary": "below" },
+    "layout": {
+      "left": ["path", "git"],
+      "right": ["model", "context_pct", "cost"],
+      "secondary": []
+    },
+    "hiddenStatusKeys": ["mcp", "pi-lens-lsp"],
+    "hiddenSegments": ["cache_read"],
+    "model": { "showThinkingLevel": true, "thinkingDisplay": "parenthesized" },
+    "context": { "showAutoCompact": false, "showIcon": true, "decimalPlaces": 0, "display": "percent" }
+  }
+}
+```
+
+`layout` lets each built-in segment choose the primary left side, primary right side, or secondary row. `placement.primary` and `placement.secondary` independently accept `above` or `below`. Primary left/right groups are separated by flexible padding so the right group stays right-aligned. `separator` accepts any built-in separator name. `hiddenStatusKeys` suppresses extension statuses even when configured as custom items, and `hiddenSegments` removes built-in segments. Context warning/error thresholds still override the configured normal-state color.
+
 Use `"model": { "display": "qualified" }` when two providers expose models with the same display name.
+`model.thinkingDisplay: "parenthesized"` renders effort as `Model (high)` in the model color. `context.display: "percent"` hides the context window size; `showIcon` controls its icon and `decimalPlaces` accepts `0` through `3`.
 
 Subscription cost display accepts:
 
