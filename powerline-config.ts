@@ -31,6 +31,7 @@ export interface PowerlineConfig {
   segmentOptions: StatusLineSegmentOptions;
   mouseScroll: boolean;
   fixedEditor: boolean;
+  compactEditorGap: boolean;
   welcome: boolean;
   stashSharpSShortcut: boolean;
 }
@@ -264,6 +265,7 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     segmentOptions: {},
     mouseScroll: true,
     fixedEditor: true,
+    compactEditorGap: false,
     welcome: true,
     stashSharpSShortcut: false,
   };
@@ -286,6 +288,7 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     segmentOptions: normalizeSegmentOptions(value),
     mouseScroll: value.mouseScroll !== false,
     fixedEditor: value.fixedEditor !== false,
+    compactEditorGap: value.compactEditorGap === true,
     welcome: value.welcome !== false,
     stashSharpSShortcut: value.stashSharpSShortcut === true,
   };

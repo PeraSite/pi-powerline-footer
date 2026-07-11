@@ -157,7 +157,8 @@ Display overrides can be applied independently of the selected preset:
     "hiddenStatusKeys": ["mcp", "pi-lens-lsp"],
     "hiddenSegments": ["cache_read"],
     "model": { "showThinkingLevel": true, "thinkingDisplay": "parenthesized" },
-    "context": { "showAutoCompact": false, "showIcon": true, "decimalPlaces": 0, "display": "percent" }
+    "context": { "showAutoCompact": false, "showIcon": true, "decimalPlaces": 0, "display": "percent" },
+    "compactEditorGap": true
   }
 }
 ```
@@ -166,6 +167,7 @@ Display overrides can be applied independently of the selected preset:
 
 Use `"model": { "display": "qualified" }` when two providers expose models with the same display name.
 `model.thinkingDisplay: "parenthesized"` renders effort as `Model (high)` in the model color. `context.display: "percent"` hides the context window size; `showIcon` controls its icon and `decimalPlaces` accepts `0` through `3`.
+`compactEditorGap: true` removes Pi's built-in blank spacer immediately above the editor through the extension, without modifying the Pi installation.
 
 Subscription cost display accepts:
 

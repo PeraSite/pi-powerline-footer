@@ -40,6 +40,7 @@ import { renderFixedEditorCluster } from "./fixed-editor/cluster.ts";
 import { DEFAULT_SCROLL_REPAINT_THROTTLE_MS, emergencyTerminalModeReset, TerminalSplitCompositor } from "./fixed-editor/terminal-split.ts";
 import { inlineEditorQuitCursorRestore } from "./terminal-cursor.ts";
 import { fg, getDefaultColors } from "./theme.ts";
+import { installCompactEditorGap } from "./editor-gap.ts";
 import {
   isSupportedSuperShortcut,
   matchesConfiguredShortcut,
@@ -1081,6 +1082,7 @@ export default function powerlineFooter(pi: ExtensionAPI) {
   let isStreaming = false;
   let tuiRef: any = null;
   let restoreFooterStatusRepaintHook: (() => void) | null = null;
+  let restoreCompactEditorGap: (() => void) | null = null;
   let fixedEditorCompositor: TerminalSplitCompositor | null = null;
   let fixedStatusContainer: any = null;
   let fixedEditorContainer: any = null;
@@ -1877,6 +1879,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
                 ctx.ui.setStatus("stash", undefined);
           restoreFooterStatusRepaintHook?.();
           restoreFooterStatusRepaintHook = null;
+          restoreCompactEditorGap?.();
+          restoreCompactEditorGap = null;
           teardownFixedEditorCompositor();
           stashShortcutInputUnsubscribe?.();
           stashShortcutInputUnsubscribe = null;
@@ -2655,6 +2659,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       : null;
 
     teardownFixedEditorCompositor();
+    restoreCompactEditorGap?.();
+    restoreCompactEditorGap = null;
     ctx.ui.setWidget("powerline-top", undefined);
     ctx.ui.setWidget("powerline-secondary", undefined);
     ctx.ui.setWidget("powerline-bash-transcript", undefined);
@@ -2845,6 +2851,9 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     ctx.ui.setFooter((tui: any, _theme: Theme, footerData: ReadonlyFooterDataProvider) => {
       footerDataRef = footerData;
       tuiRef = tui;
+      if (config.compactEditorGap && currentEditor) {
+        restoreCompactEditorGap = installCompactEditorGap(tui, currentEditor);
+      }
       installFooterStatusRepaintHook(footerData);
       const unsub = footerData.onBranchChange(() => requestStatusRender());
 
@@ -2853,6 +2862,8 @@ export default function powerlineFooter(pi: ExtensionAPI) {
           unsub();
           restoreFooterStatusRepaintHook?.();
           restoreFooterStatusRepaintHook = null;
+          restoreCompactEditorGap?.();
+          restoreCompactEditorGap = null;
         },
         invalidate() {
           requestStatusRender();
