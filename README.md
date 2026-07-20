@@ -20,7 +20,7 @@ The screenshot is illustrative and may differ from current Pi versions. The supp
 
 **Rounded box design** — Status renders directly in the editor's top border, not as a separate footer.
 
-**Fixed editor cluster** — In interactive TUI sessions, chat/feed content scrolls above the fixed Pi working/status line, powerline rows, editor, ghost suggestions, bash transcript, and last-prompt/status rows. Scroll chat with the mouse wheel, PageUp/PageDown, Command+PageUp/PageDown, Ctrl+Shift+Up/Down, or message-jump shortcuts; the editor stays put. When you are scrolled away from the bottom, a stacked shortcut hint card appears over the bottom of the chat viewport with the configured bottom, user-message, and assistant-response jump shortcuts. When mouse scrolling is enabled, click anywhere in that card to jump back to the bottom. Drag text to copy it, drag selection to the viewport edge to scroll, double-click a line to select it, and right-click to open the terminal menu. Use `/powerline fixed-editor off` for Pi’s regular scrolling layout, or `/powerline mouse-scroll off` for native terminal selection.
+**Fixed editor cluster** — In interactive TUI sessions, chat/feed content scrolls above the fixed Pi working/status line, powerline rows, editor, ghost suggestions, bash transcript, and last-prompt/status rows. Scroll chat with the mouse wheel, PageUp/PageDown, Command+PageUp/PageDown, Ctrl+Shift+Up/Down, or message-jump shortcuts; the editor stays put. `powerline.mouseScrollLines` controls lines per wheel event. When you are scrolled away from the bottom, a stacked shortcut hint card can appear over the bottom of the chat viewport; set `powerline.showScrollAwayNavigationCard` to `false` to hide it without disabling jump shortcuts. Drag text to copy it, drag selection to the viewport edge to scroll, double-click a line to select it, and right-click to open the terminal menu. Use `/powerline fixed-editor off` for Pi’s regular scrolling layout, or `/powerline mouse-scroll off` for native terminal selection.
 
 **Live thinking level indicator** — Shows current thinking level (`think:off`, `think:med`, etc.) with per-level colors. High and xhigh levels use a rainbow effect inspired by Claude Code's ultrathink.
 
@@ -158,6 +158,8 @@ Display overrides can be applied independently of the selected preset:
     "hiddenSegments": ["cache_read"],
     "model": { "showThinkingLevel": true, "thinkingDisplay": "parenthesized" },
     "context": { "showAutoCompact": false, "showIcon": true, "decimalPlaces": 0, "display": "remaining-percent" },
+    "mouseScrollLines": 1,
+    "showScrollAwayNavigationCard": false,
     "compactEditorGap": true
   }
 }
@@ -166,8 +168,8 @@ Display overrides can be applied independently of the selected preset:
 `layout` lets each built-in segment choose the primary left side, primary right side, or secondary row. `placement.primary` and `placement.secondary` independently accept `above` or `below`. Primary left/right groups are separated by flexible padding so the right group stays right-aligned. `separator` accepts any built-in separator name. `hiddenStatusKeys` suppresses extension statuses even when configured as custom items, and `hiddenSegments` removes built-in segments. Context warning/error thresholds still override the configured normal-state color.
 
 Use `"model": { "display": "qualified" }` when two providers expose models with the same display name.
-`model.thinkingDisplay: "parenthesized"` renders effort as `Model (high)` in the model color. `context.display: "percent"` hides the context window size, while `"remaining-percent"` can render `◔ 73% left`; `showIcon` controls its icon and `decimalPlaces` accepts `0` through `3`.
-`compactEditorGap: true` removes Pi's built-in blank spacer immediately above the editor through the extension, without modifying the Pi installation.
+`model.thinkingDisplay: "parenthesized"` renders effort as `Model (high)` in the model color. `context.display: "percent"` hides the context window size, while `"remaining-percent"` renders a nearest-quarter progress icon such as `● 100% left`, `◑ 50% left`, or `○ 0% left`; `showIcon` controls its visibility and `decimalPlaces` accepts `0` through `3`.
+`mouseScrollLines` accepts an integer from `1` to `100` (default `3`). `showScrollAwayNavigationCard: false` hides the fixed-editor shortcut card while preserving its jump shortcuts. `compactEditorGap: true` removes Pi's built-in blank spacer immediately above the editor through the extension, without modifying the Pi installation.
 
 Subscription cost display accepts:
 

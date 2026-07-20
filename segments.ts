@@ -17,6 +17,13 @@ function withIcon(icon: string, text: string): string {
   return icon ? `${icon} ${text}` : text;
 }
 
+const CONTEXT_REMAINING_ICONS = ["○", "◔", "◑", "◕", "●"] as const;
+
+function contextRemainingIcon(remainingPercent: number): string {
+  const clamped = Math.max(0, Math.min(100, remainingPercent));
+  return CONTEXT_REMAINING_ICONS[Math.round(clamped / 25)]!;
+}
+
 function formatTokens(n: number): string {
   if (n < 1000) return n.toString();
   if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
@@ -317,7 +324,8 @@ const contextPctSegment: StatusLineSegment = {
         ? `${pct.toFixed(decimalPlaces)}%`
         : `${pct.toFixed(decimalPlaces)}%/${formatTokens(window)}${autoIcon}`;
     const showIcon = ctx.options.context?.showIcon ?? !percentOnly;
-    const decorate = (value: string) => showIcon ? withIcon(icons.context, value) : value;
+    const contextIcon = remainingPercent ? contextRemainingIcon(remaining) : icons.context;
+    const decorate = (value: string) => showIcon ? withIcon(contextIcon, value) : value;
 
     // Preserve warning/error thresholds while coloring the icon and value together.
     let content: string;

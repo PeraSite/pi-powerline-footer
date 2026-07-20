@@ -2425,21 +2425,24 @@ export default function powerlineFooter(pi: ExtensionAPI) {
       tui,
       terminal: tui.terminal,
       mouseScroll: config.mouseScroll,
+      mouseScrollLines: config.mouseScrollLines,
       keyboardScrollShortcuts: {
         up: resolvedShortcuts.scrollChatUp,
         down: resolvedShortcuts.scrollChatDown,
       },
       scrollRepaintThrottleMs: DEFAULT_SCROLL_REPAINT_THROTTLE_MS,
-      scrollAwayNavigationCard: {
-        shortcuts: [
-          scrollAwayShortcutEntry("bottom", resolvedShortcuts.jumpChatBottom),
-          scrollAwayShortcutEntry("previousUser", resolvedShortcuts.jumpPreviousUserMessage),
-          scrollAwayShortcutEntry("nextUser", resolvedShortcuts.jumpNextUserMessage),
-          scrollAwayShortcutEntry("previousAssistant", resolvedShortcuts.jumpPreviousLlmMessage),
-          scrollAwayShortcutEntry("nextAssistant", resolvedShortcuts.jumpNextLlmMessage),
-        ].filter((shortcut): shortcut is { id: ScrollAwayShortcutId; shortcutLabel: string } => shortcut !== null),
-        onClickBottom: resolvedShortcuts.jumpChatBottom ? () => jumpChatToBottom(ctx) : undefined,
-      },
+      scrollAwayNavigationCard: config.showScrollAwayNavigationCard
+        ? {
+            shortcuts: [
+              scrollAwayShortcutEntry("bottom", resolvedShortcuts.jumpChatBottom),
+              scrollAwayShortcutEntry("previousUser", resolvedShortcuts.jumpPreviousUserMessage),
+              scrollAwayShortcutEntry("nextUser", resolvedShortcuts.jumpNextUserMessage),
+              scrollAwayShortcutEntry("previousAssistant", resolvedShortcuts.jumpPreviousLlmMessage),
+              scrollAwayShortcutEntry("nextAssistant", resolvedShortcuts.jumpNextLlmMessage),
+            ].filter((shortcut): shortcut is { id: ScrollAwayShortcutId; shortcutLabel: string } => shortcut !== null),
+            onClickBottom: resolvedShortcuts.jumpChatBottom ? () => jumpChatToBottom(ctx) : undefined,
+          }
+        : undefined,
       onCopySelection: (text) => copyTextToClipboard(ctx, text),
       getShowHardwareCursor: () => typeof tui.getShowHardwareCursor === "function" && tui.getShowHardwareCursor(),
       renderCluster: (width, terminalRows) => {

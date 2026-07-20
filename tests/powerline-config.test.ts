@@ -18,12 +18,16 @@ test("parses display overrides and ignores invalid values", () => {
     hiddenStatusKeys: ["mcp", " pi-lens-lsp ", "mcp", 42],
     hiddenSegments: ["cache_read", "not-a-segment"],
     context: { color: "accent", showAutoCompact: false, showIcon: true, decimalPlaces: 0, display: "remaining-percent" },
+    mouseScrollLines: 1,
+    showScrollAwayNavigationCard: false,
     compactEditorGap: true,
   }, presets);
 
   assert.equal(config.separator, "none");
   assert.equal(config.primaryPlacement, "belowEditor");
   assert.equal(config.secondaryPlacement, "aboveEditor");
+  assert.equal(config.mouseScrollLines, 1);
+  assert.equal(config.showScrollAwayNavigationCard, false);
   assert.equal(config.compactEditorGap, true);
   assert.deepEqual(config.layout, {
     left: ["path", "git"],

@@ -30,7 +30,9 @@ export interface PowerlineConfig {
   hiddenSegments: BuiltinStatusLineSegmentId[];
   segmentOptions: StatusLineSegmentOptions;
   mouseScroll: boolean;
+  mouseScrollLines: number;
   fixedEditor: boolean;
+  showScrollAwayNavigationCard: boolean;
   compactEditorGap: boolean;
   welcome: boolean;
   stashSharpSShortcut: boolean;
@@ -267,7 +269,9 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     hiddenSegments: [],
     segmentOptions: {},
     mouseScroll: true,
+    mouseScrollLines: 3,
     fixedEditor: true,
+    showScrollAwayNavigationCard: true,
     compactEditorGap: false,
     welcome: true,
     stashSharpSShortcut: false,
@@ -290,7 +294,14 @@ export function parsePowerlineConfig(value: unknown, presets: readonly StatusLin
     hiddenSegments: normalizeHiddenSegments(value.hiddenSegments),
     segmentOptions: normalizeSegmentOptions(value),
     mouseScroll: value.mouseScroll !== false,
+    mouseScrollLines: typeof value.mouseScrollLines === "number"
+      && Number.isFinite(value.mouseScrollLines)
+      && value.mouseScrollLines >= 1
+      && value.mouseScrollLines <= 100
+      ? Math.floor(value.mouseScrollLines)
+      : defaultConfig.mouseScrollLines,
     fixedEditor: value.fixedEditor !== false,
+    showScrollAwayNavigationCard: value.showScrollAwayNavigationCard !== false,
     compactEditorGap: value.compactEditorGap === true,
     welcome: value.welcome !== false,
     stashSharpSShortcut: value.stashSharpSShortcut === true,

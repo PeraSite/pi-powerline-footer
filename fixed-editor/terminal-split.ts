@@ -32,6 +32,7 @@ interface TerminalSplitCompositorOptions {
   renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
   getShowHardwareCursor?: () => boolean;
   mouseScroll?: boolean;
+  mouseScrollLines?: number;
   keyboardScrollShortcuts?: KeyboardScrollShortcuts;
   scrollAwayNavigationCard?: ScrollAwayNavigationCardOptions;
   onCopySelection?: (text: string) => void;
@@ -118,6 +119,7 @@ const CONTEXT_MENU_MOUSE_REPORTING_PAUSE_MS = 1200;
 const CONTEXT_MENU_SELECTION_RESTORE_WINDOW_MS = 5000;
 const CONTEXT_MENU_CLIPBOARD_RESTORE_INTERVAL_MS = 100;
 export const DEFAULT_SCROLL_REPAINT_THROTTLE_MS = 16;
+const DEFAULT_MOUSE_SCROLL_LINES = 3;
 const SCROLL_SETTLED_RENDER_MS = 80;
 const DOUBLE_CLICK_MS = 500;
 const DEFAULT_KEYBOARD_SCROLL_SHORTCUTS: KeyboardScrollShortcuts = {
@@ -252,11 +254,11 @@ function mouseBaseButton(code: number): number {
   return code & ~(4 | 8 | 16 | 32);
 }
 
-function mouseScrollDelta(packet: SgrMousePacket): number {
+function mouseScrollDelta(packet: SgrMousePacket, lines: number): number {
   if (packet.final !== "M") return 0;
   const baseButton = mouseBaseButton(packet.code);
-  if (baseButton === 64) return 3;
-  if (baseButton === 65) return -3;
+  if (baseButton === 64) return lines;
+  if (baseButton === 65) return -lines;
   return 0;
 }
 
@@ -543,6 +545,7 @@ export class TerminalSplitCompositor {
   private readonly renderCluster: (width: number, terminalRows: number) => FixedEditorClusterRender;
   private readonly getShowHardwareCursor: () => boolean;
   private readonly mouseScroll: boolean;
+  private readonly mouseScrollLines: number;
   private readonly keyboardScrollShortcuts: KeyboardScrollShortcuts;
   private readonly scrollAwayNavigationCard: ScrollAwayNavigationCardOptions | null;
   private readonly onCopySelection: ((text: string) => void) | null;
@@ -591,6 +594,7 @@ export class TerminalSplitCompositor {
     this.renderCluster = options.renderCluster;
     this.getShowHardwareCursor = options.getShowHardwareCursor ?? (() => false);
     this.mouseScroll = options.mouseScroll !== false;
+    this.mouseScrollLines = Math.max(1, Math.floor(options.mouseScrollLines ?? DEFAULT_MOUSE_SCROLL_LINES));
     this.keyboardScrollShortcuts = options.keyboardScrollShortcuts ?? DEFAULT_KEYBOARD_SCROLL_SHORTCUTS;
     this.scrollAwayNavigationCard = options.scrollAwayNavigationCard ?? null;
     this.onCopySelection = options.onCopySelection ?? null;
@@ -864,7 +868,7 @@ export class TerminalSplitCompositor {
     if (mousePackets) {
       let wheelDeltas: number[] = [];
       for (const packet of mousePackets) {
-        const delta = mouseScrollDelta(packet);
+        const delta = mouseScrollDelta(packet, this.mouseScrollLines);
         if (delta !== 0) {
           wheelDeltas.push(delta);
           continue;
@@ -894,7 +898,7 @@ export class TerminalSplitCompositor {
   }
 
   private handleMousePacket(packet: SgrMousePacket, options: { skipScrollAwayCard?: boolean } = {}): void {
-    const delta = mouseScrollDelta(packet);
+    const delta = mouseScrollDelta(packet, this.mouseScrollLines);
     if (delta !== 0) {
       this.queueScrollBy(delta);
       return;

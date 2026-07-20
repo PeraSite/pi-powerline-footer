@@ -503,6 +503,7 @@ test("terminal split renders chat through an app-owned scroll viewport", () => {
   const compositor = new TerminalSplitCompositor({
     tui,
     terminal,
+    mouseScrollLines: 1,
     renderCluster: () => ({ lines: ["cluster-a", "cluster-b"], cursor: null }),
   });
 
@@ -522,14 +523,14 @@ test("terminal split renders chat through an app-owned scroll viewport", () => {
   assert.deepEqual(inputListener?.("\x1b[<64;1;1M"), { consume: true });
   assert.deepEqual(renderRequests, [undefined]);
   assert.deepEqual(tui.render(40), [
-    "line-2", "line-3", "line-4", "line-5", "line-6",
-    "line-7", "line-8", "line-9", "line-10", "line-11",
+    "line-4", "line-5", "line-6", "line-7", "line-8",
+    "line-9", "line-10", "line-11", "line-12", "line-13",
   ]);
 
   rootLines = [...rootLines, "line-15"];
   assert.deepEqual(tui.render(40), [
-    "line-2", "line-3", "line-4", "line-5", "line-6",
-    "line-7", "line-8", "line-9", "line-10", "line-11",
+    "line-4", "line-5", "line-6", "line-7", "line-8",
+    "line-9", "line-10", "line-11", "line-12", "line-13",
   ]);
 
   assert.deepEqual(inputListener?.("\x1b[<65;1;1M"), { consume: true });

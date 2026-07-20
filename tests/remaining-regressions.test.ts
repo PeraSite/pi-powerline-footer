@@ -159,14 +159,24 @@ test("context segment can display only its percentage", () => {
   assert.equal(stripAnsi(rendered.content), "86.2%");
 });
 
-test("context segment can display the remaining percentage with its configured icon", () => {
-  const rendered = renderSegment("context_pct", createSegmentContext({
-    contextPercent: 26.6,
-    contextWindow: 372_000,
-    options: { context: { display: "remaining-percent", decimalPlaces: 0, showIcon: true } },
-  }));
+test("remaining context icon tracks the nearest quarter", () => {
+  const cases = [
+    { contextPercent: 0, expected: "● 100% left" },
+    { contextPercent: 25, expected: "◕ 75% left" },
+    { contextPercent: 50, expected: "◑ 50% left" },
+    { contextPercent: 75, expected: "◔ 25% left" },
+    { contextPercent: 100, expected: "○ 0% left" },
+  ];
 
-  assert.equal(stripAnsi(rendered.content), "◔ 73% left");
+  for (const { contextPercent, expected } of cases) {
+    const rendered = renderSegment("context_pct", createSegmentContext({
+      contextPercent,
+      contextWindow: 372_000,
+      options: { context: { display: "remaining-percent", decimalPlaces: 0, showIcon: true } },
+    }));
+
+    assert.equal(stripAnsi(rendered.content), expected);
+  }
 });
 
 test("ASCII dot separators use a centered middle dot", () => {
