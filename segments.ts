@@ -279,6 +279,11 @@ const costSegment: StatusLineSegment = {
     }
 
     const subscriptionDisplay = ctx.options.cost?.subscriptionDisplay ?? "subscription";
+    if (subscriptionDisplay === "reported-cost-only") {
+      return reportedCost
+        ? { content: color(ctx, "cost", reportedCost), visible: true }
+        : { content: "", visible: false };
+    }
     if (subscriptionDisplay === "reported-cost" && reportedCost) {
       return { content: color(ctx, "cost", reportedCost), visible: true };
     }
@@ -298,14 +303,19 @@ const contextPctSegment: StatusLineSegment = {
     const icons = getIcons();
     const pct = ctx.contextPercent;
     const window = ctx.contextWindow;
-    const percentOnly = ctx.options.context?.display === "percent";
+    const contextDisplay = ctx.options.context?.display;
+    const percentOnly = contextDisplay === "percent";
+    const remainingPercent = contextDisplay === "remaining-percent";
     const decimalPlaces = ctx.options.context?.decimalPlaces ?? 1;
 
     const showAutoCompact = ctx.options.context?.showAutoCompact !== false;
     const autoIcon = showAutoCompact && ctx.autoCompactEnabled && icons.auto ? ` ${icons.auto}` : "";
-    const text = percentOnly
-      ? `${pct.toFixed(decimalPlaces)}%`
-      : `${pct.toFixed(decimalPlaces)}%/${formatTokens(window)}${autoIcon}`;
+    const remaining = Math.max(0, Math.min(100, 100 - pct));
+    const text = remainingPercent
+      ? `${remaining.toFixed(decimalPlaces)}% left`
+      : percentOnly
+        ? `${pct.toFixed(decimalPlaces)}%`
+        : `${pct.toFixed(decimalPlaces)}%/${formatTokens(window)}${autoIcon}`;
     const showIcon = ctx.options.context?.showIcon ?? !percentOnly;
     const decorate = (value: string) => showIcon ? withIcon(icons.context, value) : value;
 

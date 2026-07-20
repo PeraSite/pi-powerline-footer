@@ -93,13 +93,13 @@ export interface StatusLineSegmentOptions {
     polling?: "full" | "branch" | "off";
   };
   time?: { format?: "12h" | "24h"; showSeconds?: boolean };
-  cost?: { subscriptionDisplay?: "subscription" | "reported-cost" | "both" };
+  cost?: { subscriptionDisplay?: "subscription" | "reported-cost" | "reported-cost-only" | "both" };
   context?: {
     color?: ColorValue;
     showAutoCompact?: boolean;
     showIcon?: boolean;
     decimalPlaces?: number;
-    display?: "full" | "percent";
+    display?: "full" | "percent" | "remaining-percent";
   };
 }
 

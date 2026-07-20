@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { NERD_ICONS } from "../icons.ts";
+import { ASCII_SEPARATORS, NERD_ICONS } from "../icons.ts";
 import { isStaleExtensionContextError, shouldResetExtendedKeyboardModesOnShutdown, shouldShowStartupWelcome } from "../lifecycle.ts";
 import { renderSegment } from "../segments.ts";
 import type { SegmentContext } from "../types.ts";
@@ -99,6 +99,15 @@ test("cost segment supports subscription display modes", () => {
     usingSubscription: true,
     options: { cost: { subscriptionDisplay: "reported-cost" } },
   }));
+  const zeroReportedOnly = renderSegment("cost", createSegmentContext({
+    usingSubscription: true,
+    options: { cost: { subscriptionDisplay: "reported-cost-only" } },
+  }));
+  const reportedOnly = renderSegment("cost", createSegmentContext({
+    usingSubscription: true,
+    usageStats: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0.42 },
+    options: { cost: { subscriptionDisplay: "reported-cost-only" } },
+  }));
   const zeroBoth = renderSegment("cost", createSegmentContext({
     usingSubscription: true,
     options: { cost: { subscriptionDisplay: "both" } },
@@ -108,6 +117,8 @@ test("cost segment supports subscription display modes", () => {
   assert.deepEqual(reportedCost, { content: "$0.42", visible: true });
   assert.deepEqual(both, { content: "$0.42 (sub)", visible: true });
   assert.deepEqual(zeroReported, { content: "(sub)", visible: true });
+  assert.deepEqual(zeroReportedOnly, { content: "", visible: false });
+  assert.deepEqual(reportedOnly, { content: "$0.42", visible: true });
   assert.deepEqual(zeroBoth, { content: "(sub)", visible: true });
 });
 
@@ -146,6 +157,20 @@ test("context segment can display only its percentage", () => {
   }));
 
   assert.equal(stripAnsi(rendered.content), "86.2%");
+});
+
+test("context segment can display the remaining percentage with its configured icon", () => {
+  const rendered = renderSegment("context_pct", createSegmentContext({
+    contextPercent: 26.6,
+    contextWindow: 372_000,
+    options: { context: { display: "remaining-percent", decimalPlaces: 0, showIcon: true } },
+  }));
+
+  assert.equal(stripAnsi(rendered.content), "◔ 73% left");
+});
+
+test("ASCII dot separators use a centered middle dot", () => {
+  assert.equal(ASCII_SEPARATORS.dot, "·");
 });
 
 test("context percentage supports integer precision with an icon", () => {

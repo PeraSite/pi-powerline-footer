@@ -203,6 +203,7 @@ function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmen
     options.cost = {
       ...(raw.cost.subscriptionDisplay === "subscription"
         || raw.cost.subscriptionDisplay === "reported-cost"
+        || raw.cost.subscriptionDisplay === "reported-cost-only"
         || raw.cost.subscriptionDisplay === "both"
         ? { subscriptionDisplay: raw.cost.subscriptionDisplay }
         : {}),
@@ -225,7 +226,9 @@ function normalizeSegmentOptions(raw: Record<string, unknown>): StatusLineSegmen
         && raw.context.decimalPlaces <= 3
         ? { decimalPlaces: Math.floor(raw.context.decimalPlaces) }
         : {}),
-      ...(raw.context.display === "full" || raw.context.display === "percent"
+      ...(raw.context.display === "full"
+        || raw.context.display === "percent"
+        || raw.context.display === "remaining-percent"
         ? { display: raw.context.display }
         : {}),
     };

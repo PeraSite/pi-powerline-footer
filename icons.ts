@@ -150,7 +150,7 @@ export const ASCII_SEPARATORS: SeparatorChars = {
   space: " ",
   asciiLeft: ">",
   asciiRight: "<",
-  dot: ".",
+  dot: "·",
 };
 
 // Detect Nerd Font support (check TERM or specific env var)

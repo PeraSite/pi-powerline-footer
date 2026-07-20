@@ -67,7 +67,8 @@ test("parsePowerlineConfig extracts supported segment options", () => {
       path: { mode: "full", maxLength: 120 },
       git: { showBranch: false, showStaged: false, showUnstaged: true, showUntracked: false, polling: "branch" },
       time: { format: "12h", showSeconds: true },
-      cost: { subscriptionDisplay: "both" },
+      cost: { subscriptionDisplay: "reported-cost-only" },
+      context: { display: "remaining-percent" },
     },
     ["default", "compact"],
   );
@@ -77,7 +78,8 @@ test("parsePowerlineConfig extracts supported segment options", () => {
     path: { mode: "full", maxLength: 120 },
     git: { showBranch: false, showStaged: false, showUnstaged: true, showUntracked: false, polling: "branch" },
     time: { format: "12h", showSeconds: true },
-    cost: { subscriptionDisplay: "both" },
+    cost: { subscriptionDisplay: "reported-cost-only" },
+    context: { display: "remaining-percent" },
   });
 });
 
