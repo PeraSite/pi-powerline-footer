@@ -19,6 +19,7 @@ interface BashModeEditorOptions {
   onExitBashMode: () => void;
   onSubmitCommand: (command: string) => void;
   onEditorSubmit?: () => void;
+  onClearPrompt?: (text: string) => void;
   editorBoundaryShortcuts?: EditorBoundaryShortcuts;
   onInterrupt: () => void;
   onNotify: (message: string, level?: "info" | "warning" | "error") => void;
@@ -193,6 +194,14 @@ export class BashModeEditor extends CustomEditor {
       if (bashMode && this.keybindingsRef.matches(data, "app.clear") && this.optionsRef.isShellRunning()) {
         this.optionsRef.onInterrupt();
         return;
+      }
+
+      if (!bashMode && this.keybindingsRef.matches(data, "app.clear")) {
+        const text = this.getText();
+        if (text.trim()) {
+          this.addToHistory(text);
+          this.optionsRef.onClearPrompt?.(text);
+        }
       }
 
       if (bashMode && this.keybindingsRef.matches(data, "tui.editor.cursorUp")) {

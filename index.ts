@@ -1,6 +1,7 @@
 import {
   copyToClipboard,
   type ExtensionAPI,
+  type ExtensionContext,
   type ReadonlyFooterDataProvider,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -233,6 +234,7 @@ const SHORTCUT_SYMBOL_KEYS = new Set([
   "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "|", "~", "{", "}", ":", "<", ">", "?",
 ]);
 const PROMPT_HISTORY_LIMIT = 100;
+const CLEARED_PROMPT_ENTRY_TYPE = "powerline-cleared-prompt";
 const LAYOUT_CACHE_TTL_MS = 250;
 const STREAMING_LAYOUT_CACHE_TTL_MS = 1000;
 const STATUS_RENDER_DEBOUNCE_MS = 33;
@@ -487,7 +489,10 @@ function readRecentProjectPrompts(cwd: string, limit: number): string[] {
 
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
-      if (!line || !line.includes('"type":"message"') || !line.includes('"role":"user"')) {
+      const isUserPrompt = line?.includes('"type":"message"') && line.includes('"role":"user"');
+      const isClearedPrompt = line?.includes('"type":"custom"')
+        && line.includes(`"customType":"${CLEARED_PROMPT_ENTRY_TYPE}"`);
+      if (!line || (!isUserPrompt && !isClearedPrompt)) {
         continue;
       }
 
@@ -499,22 +504,29 @@ function readRecentProjectPrompts(cwd: string, limit: number): string[] {
         throw new Error(`Failed to parse session file ${filePath}: ${message}`, { cause: error });
       }
 
-      if (!isRecord(entry) || entry.type !== "message" || !isRecord(entry.message) || entry.message.role !== "user") {
+      if (!isRecord(entry)) {
         continue;
       }
 
-      const text = getPromptHistoryText(entry.message.content);
-      if (!hasNonWhitespaceText(text)) {
-        continue;
+      let text = "";
+      let timestamp = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : 0;
+      if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "user") {
+        text = getPromptHistoryText(entry.message.content);
+        if (typeof entry.message.timestamp === "number") {
+          timestamp = entry.message.timestamp;
+        }
+      } else if (
+        entry.type === "custom"
+        && entry.customType === CLEARED_PROMPT_ENTRY_TYPE
+        && isRecord(entry.data)
+        && typeof entry.data.text === "string"
+      ) {
+        text = entry.data.text.trim();
       }
 
-      const timestamp = typeof entry.message.timestamp === "number"
-        ? entry.message.timestamp
-        : typeof entry.timestamp === "string"
-          ? Date.parse(entry.timestamp)
-          : 0;
-
-      promptEntries.push({ text, timestamp: Number.isFinite(timestamp) ? timestamp : 0 });
+      if (hasNonWhitespaceText(text)) {
+        promptEntries.push({ text, timestamp: Number.isFinite(timestamp) ? timestamp : 0 });
+      }
     }
   }
 
@@ -535,6 +547,24 @@ function readRecentProjectPrompts(cwd: string, limit: number): string[] {
   }
 
   return prompts;
+}
+
+function flushDraftOnlySession(ctx: ExtensionContext): void {
+  const file = ctx.sessionManager.getSessionFile();
+  const entries = ctx.sessionManager.getEntries();
+  if (
+    !file
+    || existsSync(file)
+    || !entries.some((entry) => entry.type === "custom" && entry.customType === CLEARED_PROMPT_ENTRY_TYPE)
+  ) {
+    return;
+  }
+
+  const header = ctx.sessionManager.getHeader();
+  if (header) {
+    const jsonl = [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n");
+    writeFileSync(file, `${jsonl}\n`, { flag: "wx" });
+  }
 }
 
 function normalizeStashHistoryEntries(value: unknown): string[] {
@@ -1337,6 +1367,12 @@ export default function powerlineFooter(pi: ExtensionAPI) {
     showLastPrompt = settings.showLastPrompt !== false;
     config = parsePowerlineConfig(settings.powerline, PRESET_NAMES);
     stashedPromptHistory = readPersistedStashHistory();
+    try {
+      getPromptHistoryState().savedPromptHistory = readRecentProjectPrompts(ctx.cwd, PROMPT_HISTORY_LIMIT);
+    } catch (error) {
+      getPromptHistoryState().savedPromptHistory = [];
+      console.debug("[powerline-footer] Failed to load project prompt history:", error);
+    }
     bashModeActive = false;
     bashTranscript = new BashTranscriptStore(bashModeSettings);
     bashCompletionEngine = new BashCompletionEngine();
@@ -1368,12 +1404,17 @@ export default function powerlineFooter(pi: ExtensionAPI) {
 
   });
 
-  pi.on("session_shutdown", async (event) => {
+  pi.on("session_shutdown", async (event, ctx) => {
     // When switching sessions or reloading, preserve keyboard modes (Kitty
     // protocol, modifyOtherKeys) so Shift+Enter and other modified keys keep
     // working after the next session starts. Only a real quit should hard-reset
     // the terminal back to plain keyboard mode.
     const isTerminalExit = shouldResetExtendedKeyboardModesOnShutdown(event?.reason);
+    try {
+      flushDraftOnlySession(ctx);
+    } catch (error) {
+      console.debug("[powerline-footer] Failed to flush cleared prompt history:", error);
+    }
 
     sessionGeneration++;
     dismissWelcomeOverlay?.();
@@ -2684,6 +2725,13 @@ export default function powerlineFooter(pi: ExtensionAPI) {
         },
         onSubmitCommand: (command) => void runShellCommand(command, ctx),
         onEditorSubmit: () => followSubmittedEditorToBottom(),
+        onClearPrompt: (text) => {
+          try {
+            pi.appendEntry(CLEARED_PROMPT_ENTRY_TYPE, { text });
+          } catch (error) {
+            console.debug("[powerline-footer] Failed to persist cleared prompt:", error);
+          }
+        },
         editorBoundaryShortcuts: {
           start: resolvedShortcuts.editorStart,
           end: resolvedShortcuts.editorEnd,

@@ -946,6 +946,47 @@ test("bash editor recalls prompt history from single-line end without losing the
   }
 });
 
+test("bash editor saves a cleared prompt in native history before Ctrl+C clears it", async () => {
+  const links = ensureEditorModuleLinks();
+
+  try {
+    const { BashModeEditor } = await import("../bash-mode/editor.ts");
+    const { KeybindingsManager } = await import(new URL("../node_modules/@earendil-works/pi-coding-agent/dist/core/keybindings.js", import.meta.url).href);
+    const keybindings = KeybindingsManager.create();
+    let clearedPrompt = "";
+    const editor = new BashModeEditor(
+      { requestRender() {}, terminal: { columns: 80, rows: 24 } },
+      {},
+      keybindings,
+      {
+        keybindings,
+        isBashModeActive: () => false,
+        isShellRunning: () => false,
+        onExitBashMode() {},
+        onSubmitCommand() {},
+        onClearPrompt: (text) => {
+          clearedPrompt = text;
+        },
+        onInterrupt() {},
+        onNotify() {},
+        getHistoryEntries: () => [],
+        resolveGhostSuggestion: async () => null,
+      },
+    );
+    editor.onAction("app.clear", () => editor.setText(""));
+    editor.setText("안녕하세요");
+
+    editor.handleInput("\x03");
+
+    assert.equal(clearedPrompt, "안녕하세요");
+    assert.equal(editor.getText(), "");
+    editor.handleInput("\x1b[A");
+    assert.equal(editor.getText(), "안녕하세요");
+  } finally {
+    links.cleanup();
+  }
+});
+
 test("bash editor escape exits bash mode", async () => {
   const links = ensureEditorModuleLinks();
 
